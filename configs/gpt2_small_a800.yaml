@@ -1,0 +1,50 @@
+run_name: gpt2_small_a800
+seed: 42
+
+data:
+  train_bin: data/processed/gpt2_small_a800/train.bin
+  valid_bin: data/processed/gpt2_small_a800/valid.bin
+  tokenizer_path: data/processed/gpt2_small_a800/tokenizer.json
+  raw_corpus_path: data/raw/corpus.txt
+  cleaned_corpus_path: data/processed/gpt2_small_a800/corpus_clean.txt
+  train_split: 0.98
+  vocab_size: 32000
+  min_frequency: 2
+  seq_length: 512
+
+model:
+  vocab_size: 32000
+  n_layer: 12
+  n_head: 12
+  n_embd: 768
+  dropout: 0.1
+  bias: false
+
+train:
+  device: auto
+  dtype: bf16
+  batch_size: 16
+  grad_accum_steps: 8
+  num_steps: 5000
+  eval_interval: 100
+  eval_iters: 50
+  log_interval: 20
+  learning_rate: 3.0e-4
+  min_learning_rate: 3.0e-5
+  warmup_steps: 300
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  num_workers: 4
+
+generation:
+  max_new_tokens: 128
+  temperature: 0.9
+  top_k: 50
+  top_p: 0.9
+
+paths:
+  output_dir: outputs/gpt2_small_a800
+  checkpoint_dir: outputs/gpt2_small_a800/checkpoints
+  sample_dir: outputs/gpt2_small_a800/samples

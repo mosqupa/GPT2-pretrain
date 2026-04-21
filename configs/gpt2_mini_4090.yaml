@@ -1,0 +1,50 @@
+run_name: gpt2_mini_4090
+seed: 42
+
+data:
+  train_bin: data/processed/gpt2_mini_4090/train.bin
+  valid_bin: data/processed/gpt2_mini_4090/valid.bin
+  tokenizer_path: data/processed/gpt2_mini_4090/tokenizer.json
+  raw_corpus_path: data/raw/corpus.txt
+  cleaned_corpus_path: data/processed/gpt2_mini_4090/corpus_clean.txt
+  train_split: 0.97
+  vocab_size: 32000
+  min_frequency: 2
+  seq_length: 512
+
+model:
+  vocab_size: 32000
+  n_layer: 10
+  n_head: 8
+  n_embd: 512
+  dropout: 0.1
+  bias: false
+
+train:
+  device: auto
+  dtype: auto
+  batch_size: 8
+  grad_accum_steps: 8
+  num_steps: 3000
+  eval_interval: 100
+  eval_iters: 50
+  log_interval: 20
+  learning_rate: 3.0e-4
+  min_learning_rate: 3.0e-5
+  warmup_steps: 200
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  num_workers: 2
+
+generation:
+  max_new_tokens: 128
+  temperature: 0.9
+  top_k: 50
+  top_p: 0.9
+
+paths:
+  output_dir: outputs/gpt2_mini_4090
+  checkpoint_dir: outputs/gpt2_mini_4090/checkpoints
+  sample_dir: outputs/gpt2_mini_4090/samples
