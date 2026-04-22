@@ -4,6 +4,7 @@ __pycache__/
 .DS_Store
 .venv/
 data/processed/
+data/raw/
 outputs/
 *.pt
 *.bin

@@ -47,6 +47,7 @@ class TrainConfig:
     beta1: float
     beta2: float
     grad_clip: float
+    resume_from: str | None = None
     num_workers: int = 0
 
 
@@ -84,8 +85,18 @@ def load_config(path: str | Path) -> ProjectConfig:
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
+    
+    run_name = raw["run_name"]
+    # Provide default paths if not present in YAML
+    if "paths" not in raw:
+        raw["paths"] = {
+            "output_dir": f"outputs/{run_name}",
+            "checkpoint_dir": f"outputs/{run_name}/checkpoints",
+            "sample_dir": f"outputs/{run_name}/samples",
+        }
+        
     return ProjectConfig(
-        run_name=raw["run_name"],
+        run_name=run_name,
         seed=raw["seed"],
         data=_build_section(DataConfig, raw["data"]),
         model=_build_section(ModelConfig, raw["model"]),
@@ -104,4 +115,3 @@ def ensure_dirs(config: ProjectConfig) -> None:
         Path(config.data.tokenizer_path).parent,
     ):
         Path(path).mkdir(parents=True, exist_ok=True)
-

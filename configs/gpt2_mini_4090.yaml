@@ -22,10 +22,10 @@ model:
 
 train:
   device: auto
-  dtype: auto
-  batch_size: 8
+  dtype: bf16
+  batch_size: 4
   grad_accum_steps: 8
-  num_steps: 3000
+  num_steps: 6000
   eval_interval: 100
   eval_iters: 50
   log_interval: 20
@@ -36,15 +36,11 @@ train:
   beta1: 0.9
   beta2: 0.95
   grad_clip: 1.0
-  num_workers: 2
+  resume_from: null
+  num_workers: 4
 
 generation:
   max_new_tokens: 128
   temperature: 0.9
   top_k: 50
   top_p: 0.9
-
-paths:
-  output_dir: outputs/gpt2_mini_4090
-  checkpoint_dir: outputs/gpt2_mini_4090/checkpoints
-  sample_dir: outputs/gpt2_mini_4090/samples

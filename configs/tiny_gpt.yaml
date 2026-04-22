@@ -36,6 +36,7 @@ train:
   beta1: 0.9
   beta2: 0.95
   grad_clip: 1.0
+  resume_from: null
   num_workers: 0
 
 generation:
@@ -43,8 +44,3 @@ generation:
   temperature: 0.9
   top_k: 50
   top_p: 0.9
-
-paths:
-  output_dir: outputs/tiny_gpt
-  checkpoint_dir: outputs/tiny_gpt/checkpoints
-  sample_dir: outputs/tiny_gpt/samples

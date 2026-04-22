@@ -36,6 +36,7 @@ train:
   beta1: 0.9
   beta2: 0.95
   grad_clip: 1.0
+  resume_from: gpt2_mini_4090_20260421_173436
   num_workers: 4
 
 generation:
@@ -43,8 +44,3 @@ generation:
   temperature: 0.9
   top_k: 50
   top_p: 0.9
-
-paths:
-  output_dir: outputs/gpt2_small_a800
-  checkpoint_dir: outputs/gpt2_small_a800/checkpoints
-  sample_dir: outputs/gpt2_small_a800/samples

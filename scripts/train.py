@@ -19,7 +19,8 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     metrics = train(config)
-    print(json.dumps(metrics, ensure_ascii=False, indent=2))
+    if metrics is not None:
+        print(json.dumps(metrics, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
