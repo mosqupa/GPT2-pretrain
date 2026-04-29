@@ -11,3 +11,4 @@ outputs/
 *.jsonl
 tokenizer.json
 tokenizer_config.json
+reports/

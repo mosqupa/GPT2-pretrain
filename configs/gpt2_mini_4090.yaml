@@ -25,9 +25,9 @@ train:
   dtype: bf16
   batch_size: 4
   grad_accum_steps: 8
-  num_steps: 6000
-  eval_interval: 100
-  eval_iters: 50
+  num_steps: 40000
+  eval_interval: 4000
+  eval_iters: 10
   log_interval: 20
   learning_rate: 3.0e-4
   min_learning_rate: 3.0e-5
@@ -36,11 +36,11 @@ train:
   beta1: 0.9
   beta2: 0.95
   grad_clip: 1.0
-  resume_from: null
-  num_workers: 4
+  resume_from: gpt2_mini_4090_20260428_184054
+  num_workers: 0
 
 generation:
-  max_new_tokens: 128
+  max_new_tokens: 256
   temperature: 0.9
   top_k: 50
   top_p: 0.9

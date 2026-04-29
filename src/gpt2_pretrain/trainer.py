@@ -154,17 +154,18 @@ def estimate_loss(
     model.eval()
     losses = []
     data_iter = iter(data_loader)
-    for _ in range(eval_iters):
-        try:
-            x, y = next(data_iter)
-        except StopIteration:
-            data_iter = iter(data_loader)
-            x, y = next(data_iter)
-        x = x.to(device)
-        y = y.to(device)
-        with amp_context():
-            _, loss = model(x, y)
-        losses.append(loss.item())
+    with torch.inference_mode():
+        for _ in range(eval_iters):
+            try:
+                x, y = next(data_iter)
+            except StopIteration:
+                data_iter = iter(data_loader)
+                x, y = next(data_iter)
+            x = x.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
+            with amp_context():
+                _, loss = model(x, y)
+            losses.append(loss.item())
     model.train()
     loss_value = sum(losses) / len(losses)
     return _reduce_mean(loss_value, device, distributed)
@@ -179,7 +180,62 @@ def _make_amp_context(device: str, dtype: torch.dtype):
 def _resolve_resume_path(config: ProjectConfig) -> Path | None:
     if not config.train.resume_from:
         return None
-    return Path(config.train.resume_from)
+    resume_from = Path(config.train.resume_from)
+    candidates: list[Path] = []
+
+    # 1) Exact file path.
+    if resume_from.is_file():
+        return resume_from
+
+    # 2) Directory path.
+    if resume_from.is_dir():
+        candidates.extend(
+            [
+                resume_from / "last.pt",
+                resume_from / "best.pt",
+                resume_from / "checkpoints" / "last.pt",
+                resume_from / "checkpoints" / "best.pt",
+            ]
+        )
+
+    # 3) Common shorthand: run id / run dir name.
+    # e.g. resume_from: gpt2_mini_4090_20260422_132945
+    # -> outputs/gpt2_mini_4090_20260422_132945/checkpoints/last.pt
+    candidates.extend(
+        [
+            Path("outputs") / resume_from / "checkpoints" / "last.pt",
+            Path("outputs") / resume_from / "checkpoints" / "best.pt",
+            resume_from / "checkpoints" / "last.pt",
+            resume_from / "checkpoints" / "best.pt",
+        ]
+    )
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    return resume_from
+
+
+def _find_latest_checkpoint(run_name: str) -> Path | None:
+    candidates = sorted(
+        Path("outputs").glob(f"{run_name}_*/checkpoints/last.pt"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def _create_session_run_dir(run_name: str, distributed: DistributedContext) -> Path:
+    if distributed.is_distributed:
+        obj = [None]
+        if distributed.is_master:
+            obj[0] = datetime.now().strftime("%Y%m%d_%H%M%S")
+        torch.distributed.broadcast_object_list(obj, src=0)
+        stamp = obj[0]
+    else:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Path("outputs") / f"{run_name}_{stamp}"
 
 
 def _load_checkpoint(
@@ -207,17 +263,12 @@ def _load_checkpoint(
 
 
 def train(config: ProjectConfig) -> dict | None:
-    # Generate dynamic output directory with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_dir = Path("outputs") / f"{config.run_name}_{timestamp}"
-    
-    # Update config paths to use the new timestamped directory
+    distributed = _setup_distributed(config.train.device)
+    run_dir = _create_session_run_dir(config.run_name, distributed)
     config.paths.output_dir = str(run_dir)
     config.paths.checkpoint_dir = str(run_dir / "checkpoints")
     config.paths.sample_dir = str(run_dir / "samples")
-    
     ensure_dirs(config)
-    distributed = _setup_distributed(config.train.device)
     set_seed(config.seed)
     device = distributed.device
     device_type = "cuda" if _is_cuda_device(device) else "cpu"
@@ -278,7 +329,14 @@ def train(config: ProjectConfig) -> dict | None:
         step = 0
         tokens_seen = 0
         start_step = 0
+        round_steps = config.train.num_steps
+        if round_steps <= 0:
+            raise ValueError(f"train.num_steps must be > 0, got {round_steps}")
         resume_path = _resolve_resume_path(config)
+        if resume_path is None:
+            resume_path = _find_latest_checkpoint(config.run_name)
+            if distributed.is_master and resume_path is not None:
+                print(f"[resume] auto-resume from latest checkpoint: {resume_path}")
         if resume_path is not None:
             if not resume_path.exists():
                 raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
@@ -290,11 +348,13 @@ def train(config: ProjectConfig) -> dict | None:
                 distributed,
             )
             start_step = step
-            if step >= config.train.num_steps:
-                raise ValueError(
-                    f"Resume checkpoint step={step} has already reached train.num_steps={config.train.num_steps}. "
-                    "Please increase num_steps in the config to continue training."
-                )
+            if distributed.is_master:
+                print(f"[resume] continuing training from global_step={step}")
+        elif distributed.is_master:
+            print("[resume] no checkpoint configured, training starts from scratch.")
+        if distributed.is_master:
+            print(f"[output] session run directory: {run_dir}")
+        target_step = start_step + round_steps
 
         train_epoch = 0
         if train_sampler is not None:
@@ -303,15 +363,16 @@ def train(config: ProjectConfig) -> dict | None:
         start_time = time.time()
 
         progress = tqdm(
-            total=config.train.num_steps,
-            initial=step,
+            total=round_steps,
+            initial=0,
             desc=f"training:{config.run_name}",
             disable=not distributed.is_master,
         )
-        while step < config.train.num_steps:
+        while step < target_step:
             optimizer.zero_grad(set_to_none=True)
             loss_accum = 0.0
             local_tokens_seen = 0
+            local_step = step - start_step
             for micro_step in range(config.train.grad_accum_steps):
                 try:
                     x, y = next(train_iter)
@@ -324,8 +385,8 @@ def train(config: ProjectConfig) -> dict | None:
                 x = x.to(device, non_blocking=True)
                 y = y.to(device, non_blocking=True)
                 lr = cosine_lr(
-                    step,
-                    config.train.num_steps,
+                    local_step,
+                    round_steps,
                     config.train.warmup_steps,
                     config.train.learning_rate,
                     config.train.min_learning_rate,
@@ -363,7 +424,7 @@ def train(config: ProjectConfig) -> dict | None:
                 if step % config.train.log_interval == 0 or step == 1:
                     progress.set_postfix(loss=f"{global_loss:.4f}", lr=f"{lr:.2e}")
 
-            if step % config.train.eval_interval == 0 or step == config.train.num_steps:
+            if step % config.train.eval_interval == 0 or step == target_step:
                 train_eval = estimate_loss(model, train_loader, device, amp_context, config.train.eval_iters, distributed)
                 valid_eval = estimate_loss(model, valid_loader, device, amp_context, config.train.eval_iters, distributed)
                 perplexity = math.exp(valid_eval) if valid_eval < 20 else float("inf")
@@ -409,7 +470,6 @@ def train(config: ProjectConfig) -> dict | None:
                         metrics_json,
                         {
                             "run_name": config.run_name,
-                            "timestamp": timestamp,
                             "device": device_type,
                             "dtype": str(amp_dtype),
                             "world_size": distributed.world_size,
@@ -430,12 +490,12 @@ def train(config: ProjectConfig) -> dict | None:
 
         return {
             "run_name": config.run_name,
-            "timestamp": timestamp,
             "params": count_parameters(raw_model),
             "device": device_type,
             "dtype": str(amp_dtype),
             "world_size": distributed.world_size,
             "global_step": step,
+            "session_steps": step - start_step,
             "best_valid_loss": best_val,
             "elapsed_sec": round(time.time() - start_time, 2),
         }

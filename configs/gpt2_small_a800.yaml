@@ -36,7 +36,7 @@ train:
   beta1: 0.9
   beta2: 0.95
   grad_clip: 1.0
-  resume_from: gpt2_mini_4090_20260421_173436
+  resume_from: gpt2_mini_4090_20260422_054115
   num_workers: 4
 
 generation:

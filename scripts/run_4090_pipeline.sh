@@ -13,10 +13,10 @@ python3 scripts/prepare_corpus.py \
   --input "$RAW_CORPUS" \
   --output "$CLEAN_CORPUS"
 
-echo "[2/4] 训练 tokenizer..."
-python3 scripts/train_tokenizer.py \
-  --config "$CONFIG" \
-  --input "$CLEAN_CORPUS"
+# echo "[2/4] 训练 tokenizer..."
+# python3 scripts/train_tokenizer.py \
+#   --config "$CONFIG" \
+#   --input "$CLEAN_CORPUS"
 
 echo "[3/4] 构建训练数据..."
 python3 scripts/build_dataset.py \
