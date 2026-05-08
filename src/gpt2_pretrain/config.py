@@ -67,6 +67,17 @@ class PathConfig:
 
 
 @dataclass
+class SFTConfig:
+    source_file: str | None = None
+    train_file: str | None = None
+    valid_file: str | None = None
+    valid_split: float = 0.02
+    prompt_loss: bool = False
+    max_samples: int = 0
+    system_prompt: str = ""
+
+
+@dataclass
 class ProjectConfig:
     run_name: str
     seed: int
@@ -75,6 +86,7 @@ class ProjectConfig:
     train: TrainConfig
     generation: GenerationConfig
     paths: PathConfig
+    sft: SFTConfig | None = None
 
 
 def _build_section(section_cls: type[Any], payload: dict[str, Any]) -> Any:
@@ -103,6 +115,7 @@ def load_config(path: str | Path) -> ProjectConfig:
         train=_build_section(TrainConfig, raw["train"]),
         generation=_build_section(GenerationConfig, raw["generation"]),
         paths=_build_section(PathConfig, raw["paths"]),
+        sft=_build_section(SFTConfig, raw["sft"]) if "sft" in raw and raw["sft"] is not None else None,
     )
 
 
@@ -115,3 +128,7 @@ def ensure_dirs(config: ProjectConfig) -> None:
         Path(config.data.tokenizer_path).parent,
     ):
         Path(path).mkdir(parents=True, exist_ok=True)
+    if config.sft is not None:
+        for path in (config.sft.source_file, config.sft.train_file, config.sft.valid_file):
+            if path:
+                Path(path).parent.mkdir(parents=True, exist_ok=True)

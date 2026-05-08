@@ -13,10 +13,10 @@ python3 scripts/prepare_corpus.py \
   --input "$RAW_CORPUS" \
   --output "$CLEAN_CORPUS"
 
-# echo "[2/4] 训练 tokenizer..."
-# python3 scripts/train_tokenizer.py \
-#   --config "$CONFIG" \
-#   --input "$CLEAN_CORPUS"
+echo "[2/4] 训练 tokenizer..."
+python3 scripts/train_tokenizer.py \
+  --config "$CONFIG" \
+  --input "$CLEAN_CORPUS"
 
 echo "[3/4] 构建训练数据..."
 python3 scripts/build_dataset.py \
@@ -24,4 +24,4 @@ python3 scripts/build_dataset.py \
   --input "$CLEAN_CORPUS"
 
 echo "[4/4] 启动训练..."
-torchrun --standalone --nproc_per_node=2 scripts/train.py --config configs/gpt2_mini_4090.yaml
+python3 scripts/train.py --config "$CONFIG"

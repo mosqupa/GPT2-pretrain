@@ -1,0 +1,60 @@
+run_name: gpt2_mini_4090_sft
+seed: 42
+
+data:
+  train_bin: data/processed/gpt2_mini_4090/train.bin
+  valid_bin: data/processed/gpt2_mini_4090/valid.bin
+  tokenizer_path: data/processed/gpt2_mini_4090/tokenizer.json
+  raw_corpus_path: data/raw/corpus.txt
+  cleaned_corpus_path: data/processed/gpt2_mini_4090/corpus_clean.txt
+  train_split: 0.97
+  vocab_size: 32000
+  min_frequency: 2
+  seq_length: 512
+
+model:
+  vocab_size: 32000
+  n_layer: 10
+  n_head: 8
+  n_embd: 512
+  dropout: 0.1
+  bias: false
+
+train:
+  device: auto
+  dtype: auto
+  batch_size: 6
+  grad_accum_steps: 8
+  num_steps: 5000
+  eval_interval: 100
+  eval_iters: 20
+  log_interval: 20
+  learning_rate: 5.0e-5
+  min_learning_rate: 1.0e-5
+  warmup_steps: 50
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  grad_clip: 1.0
+  resume_from: outputs/gpt2_mini_4090_sft_20260507_152141/checkpoints/best.pt
+  num_workers: 2
+
+generation:
+  max_new_tokens: 128
+  temperature: 0.8
+  top_k: 40
+  top_p: 0.9
+
+paths:
+  output_dir: outputs/gpt2_mini_4090_sft
+  checkpoint_dir: outputs/gpt2_mini_4090_sft/checkpoints
+  sample_dir: outputs/gpt2_mini_4090_sft/samples
+
+sft:
+  source_file: data/raw/sft_zh.jsonl
+  train_file: data/processed/gpt2_mini_4090_sft/train.jsonl
+  valid_file: data/processed/gpt2_mini_4090_sft/valid.jsonl
+  valid_split: 0.02
+  prompt_loss: false
+  max_samples: 200000
+  system_prompt: 你是一个有帮助、表达清晰的中文助手。

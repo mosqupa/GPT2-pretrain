@@ -12,3 +12,6 @@ outputs/
 tokenizer.json
 tokenizer_config.json
 reports/
+*.pdf
+*.png
+*.tex

@@ -18,14 +18,15 @@
 │   ├── processed/
 │   └── raw/
 ├── outputs/
-├── reports/
 ├── scripts/
+│   └── README.md
 ├── src/
 │   └── gpt2_pretrain/
-└── tests/
+└── main.tex
 ```
 
 ## 快速开始
+（核心脚本一览见 [SCRIPTS_CORE.md](./SCRIPTS_CORE.md)，脚本分类说明见 [scripts/README.md](./scripts/README.md)）
 
 1. 安装依赖
 
@@ -35,7 +36,7 @@ python3 -m pip install -r requirements.txt
 
 2. 准备原始语料
 
-把中文语料按行写入 `data/raw/corpus.txt`。仓库内已提供一个小样例 `data/raw/sample_corpus.txt` 用于 smoke test。
+把中文语料按行写入 `data/raw/corpus.txt`。仓库内已提供一个小样例 `data/raw/sample_corpus.txt` 用于最小流程验证。
 
 3. 清洗语料
 
@@ -98,12 +99,90 @@ python3 scripts/generate.py \
 python3 scripts/plot_losses.py --run-dir outputs/tiny_gpt
 ```
 
+## 指令微调 SFT
+
+仓库已补充一套最小可用的中文 SFT 流程，支持：
+
+- 从 Hugging Face 抓取中文指令数据并标准化为 `jsonl`
+- 将 `instruction/input/output` 切分为 train/valid
+- 从预训练 checkpoint 继续做 SFT
+- 用指令格式直接推理验证
+
+### 1. 抓取中文 SFT 数据
+
+默认脚本会抓取 `PKU-Alignment/Align-Anything-Instruction-100K-zh` 并标准化为：
+
+```json
+{"instruction":"...","input":"...","output":"..."}
+```
+
+运行示例：
+
+```bash
+python3 scripts/fetch_sft_data.py \
+  --output data/raw/sft_zh.jsonl \
+  --max-samples 50000 \
+  --hf-endpoint https://hf-mirror.com \
+  --hf-timeout 120 \
+  --hf-retries 10
+```
+
+如果你已经在本地准备好了新的高质量 `sft_zh.jsonl`，上传到服务器后可直接合并到现有 `data/raw/sft_zh.jsonl`：
+
+```bash
+python3 scripts/add_sft_data.py /path/to/uploaded_sft_zh.jsonl
+```
+
+也支持一次合并多个文件：
+
+```bash
+python3 scripts/add_sft_data.py file1.jsonl file2.jsonl file3.jsonl
+```
+
+该脚本会自动：
+
+- 统一规范为 `instruction / input / output`
+- 跳过无效 json 行
+- 默认按 `(instruction, input, output)` 精确去重
+- 追加到 `data/raw/sft_zh.jsonl`
+
+### 2. 切分 train / valid
+
+```bash
+python3 scripts/prepare_sft_dataset.py --config configs/gpt2_mini_4090_sft.yaml
+```
+
+### 3. 从预训练 checkpoint 启动 SFT
+
+先把 `configs/gpt2_mini_4090_sft.yaml` 中的 `train.resume_from` 改成你的预训练 checkpoint，或直接在命令里传：
+
+```bash
+PRETRAIN_CKPT=outputs/<pretrain_run>/checkpoints/best.pt \
+bash scripts/run_4090_sft.sh
+```
+
+也可以单独执行：
+
+```bash
+python3 scripts/train_sft.py --config configs/gpt2_mini_4090_sft.yaml
+```
+
+### 4. 用指令格式测试 SFT 模型
+
+```bash
+python3 scripts/chat_sft.py \
+  --config configs/gpt2_mini_4090_sft.yaml \
+  --checkpoint outputs/<sft_run>/checkpoints/best.pt \
+  --instruction "请用通俗的话解释什么是 Transformer"
+```
+
 ## 推荐配置
 
 - `configs/tiny_gpt.yaml`: 适合 8GB 显存本机调试与作业跑通
 - `configs/gpt2_mini_4090.yaml`: 默认按双卡 4090 继续训练，`resume_from` 指向 `outputs/gpt2_mini_4090/checkpoints/last.pt`
 - `configs/gpt2_small_a800.yaml`: 适合 80GB A800 展示更大模型
 - `scripts/run_4090_pipeline.sh`: 若检测到已有 checkpoint，会跳过预处理并直接双卡续训
+- `configs/gpt2_mini_4090_sft.yaml`: 适合在 4090 上从预训练模型继续做中文 SFT
 
 ## 推荐实验
 
